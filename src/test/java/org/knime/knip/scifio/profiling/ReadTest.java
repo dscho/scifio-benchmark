@@ -30,102 +30,91 @@
  */
 package org.knime.knip.scifio.profiling;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import io.scif.FormatException;
+import ij.IJ;
+import ij.ImagePlus;
 import io.scif.img.ImgIOException;
 import io.scif.img.ImgOpener;
 import io.scif.img.ImgSaver;
 import io.scif.img.SCIFIOImgPlus;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 
 import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
+import org.scijava.Context;
 import org.scijava.util.FileUtils;
 
 import com.carrotsearch.junitbenchmarks.BenchmarkOptions;
 import com.carrotsearch.junitbenchmarks.BenchmarkRule;
 
-@BenchmarkOptions(benchmarkRounds = 20, warmupRounds = 5)
-public class WriteTest {
+@BenchmarkOptions(benchmarkRounds = 5, warmupRounds = 2)
+public class ReadTest {
 
 	/** Needed for JUnit-Benchmarks */
 	@Rule
 	public TestRule benchmarkRun = new BenchmarkRule();
 
-	static final String IMG1 = "/FakeTracks.tif";
-	private static final String BASENAME = "write_";
+	private final static long[] dims = { 1024, 1024, 2 };
 
-	private File baseDirectory;
-
-	private final ImgSaver m_saver = new ImgSaver();
-	private SCIFIOImgPlus<?> m_sfimg;
+	private final File lonelyDirectory = new File(getClass().getResource("/").getPath(), "../lonely");
+	private final File lonelyTestImage = new File(lonelyDirectory, "test.tif");
+	private final File clutteredDirectory = new File(getClass().getResource("/").getPath(), "../cluttered");
+	private final File testImageInCluttered = new File(clutteredDirectory, "test.tif");
+	private Context context = new Context();
+	private ImgSaver saver = new ImgSaver(context);
+	private ImgOpener opener = new ImgOpener(context);
 
 	@Before
-	public void setup() throws IncompatibleTypeException, ImgIOException {
-
+	public void setup() throws IOException, ImgIOException, IncompatibleTypeException {
 		// cleanup
-		baseDirectory = new File(getClass().getResource("/").getPath(), "../output");
-		FileUtils.deleteRecursively(baseDirectory);
-		assertTrue(baseDirectory.mkdirs());
+		FileUtils.deleteRecursively(lonelyDirectory);
+		assertTrue(lonelyDirectory.mkdirs());
+		FileUtils.deleteRecursively(clutteredDirectory);
+		assertTrue(clutteredDirectory.mkdirs());
 
-		final File testImage = new File(getClass().getResource(IMG1).getPath());
-		final ImgOpener opener = new ImgOpener();
-		List<SCIFIOImgPlus<?>> imgs = opener.openImgs(testImage.getPath());
-		m_sfimg = imgs.get(0);
-	}
-	
-	@After
-	public void cleanup() throws Exception {
-		FileUtils.deleteRecursively(baseDirectory);
-	}
+		// write the test images
+		writeTiff(lonelyTestImage, dims);
+		writeTiff(testImageInCluttered, dims);
 
-	@Test
-	public void tiffNaiveTest() throws ImgIOException,
-			IncompatibleTypeException, FormatException {
-
-		m_saver.saveImg(new File(baseDirectory, BASENAME + ".tif").getPath(), m_sfimg);
+		// clutter the directory
+		final long[] smallDims = new long[] { 256, 256 };
+		for (int i = 0; i < 50; i++) {
+			writeTiff(new File(clutteredDirectory, "dummy" + i + ".tiff"), smallDims);
+		}
 	}
 
-	@Test
-	public void pngNaiveTest() throws ImgIOException,
-			IncompatibleTypeException, FormatException {
-
-		m_saver.saveImg(new File(baseDirectory, BASENAME + ".png").getPath(), m_sfimg);
+	private void writeTiff(final File file, final long[] dims) throws ImgIOException, IncompatibleTypeException {
+		final Img<?> img = ArrayImgs.bytes(dims);
+		saver.saveImg(file.getPath(), img);
 	}
 
 	@Test
-	public void epsNaiveTest() throws ImgIOException,
-			IncompatibleTypeException, FormatException {
-
-		m_saver.saveImg(new File(baseDirectory, BASENAME + ".eps").getPath(), m_sfimg);
+	public void testTiffInClutteredDirectory() throws ImgIOException {
+		final List<SCIFIOImgPlus<?>> images = opener.openImgs(testImageInCluttered.getPath());
+		assertTrue(images.size() == 1);
 	}
 
 	@Test
-	public void icsNaiveTest() throws ImgIOException,
-			IncompatibleTypeException, FormatException {
-
-		m_saver.saveImg(new File(baseDirectory, BASENAME + ".ics").getPath(), m_sfimg);
+	public void testTiff() throws ImgIOException {
+		final List<SCIFIOImgPlus<?>> images = opener.openImgs(lonelyTestImage.getPath());
+		assertTrue(images.size() == 1);
 	}
 
 	@Test
-	public void jpgNaiveTest() throws ImgIOException,
-			IncompatibleTypeException, FormatException {
-
-		m_saver.saveImg(new File(baseDirectory, BASENAME + ".jpg").getPath(), m_sfimg);
+	public void testTiffImageJ1() throws ImgIOException {
+		final ImagePlus imp = IJ.openImage(lonelyTestImage.getPath());
+		assertEquals((int) dims[0], imp.getWidth());
+		assertEquals((int) dims[1], imp.getHeight());
+		assertEquals((int) dims[2], imp.getStackSize());
 	}
-
-//	@Test
-//	public void jp2NaiveTest() throws ImgIOException,
-//			IncompatibleTypeException, FormatException {
-//
-//		m_saver.saveImg(BASEFOLDER + BASENAME + ".jp2", m_sfimg);
-//	}
-
 }
