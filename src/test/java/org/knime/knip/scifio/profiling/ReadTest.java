@@ -30,10 +30,14 @@
  */
 package org.knime.knip.scifio.profiling;
 
+import static io.scif.TicToc.tic;
+import static io.scif.TicToc.toc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import fiji.PerformanceProfiler;
 import ij.IJ;
 import ij.ImagePlus;
+import io.scif.SCIFIOService;
 import io.scif.img.ImgIOException;
 import io.scif.img.ImgOpener;
 import io.scif.img.ImgSaver;
@@ -70,7 +74,7 @@ public class ReadTest {
 	private final File lonelyTestImage = new File(lonelyDirectory, "test.tif");
 	private final File clutteredDirectory = new File(getClass().getResource("/").getPath(), "../cluttered");
 	private final File testImageInCluttered = new File(clutteredDirectory, "test.tif");
-	private Context context = new Context();
+	private Context context = new Context(SCIFIOService.class);
 	private ImgSaver saver = new ImgSaver(context);
 	private ImgOpener opener = new ImgOpener(context);
 
@@ -106,7 +110,9 @@ public class ReadTest {
 
 	@Test
 	public void testTiff() throws ImgIOException {
+//		tic();
 		final List<SCIFIOImgPlus<?>> images = opener.openImgs(lonelyTestImage.getPath());
+//		toc();
 		assertTrue(images.size() == 1);
 	}
 
@@ -116,5 +122,19 @@ public class ReadTest {
 		assertEquals((int) dims[0], imp.getWidth());
 		assertEquals((int) dims[1], imp.getHeight());
 		assertEquals((int) dims[2], imp.getStackSize());
+	}
+
+	private static boolean profile = true;
+
+	public static void main(final String... args) throws Throwable {
+		if (profile && PerformanceProfiler.startProfiling(null, args)) return;
+		Thread.currentThread().setContextClassLoader(ReadTest.class.getClassLoader());
+		final ReadTest test = new ReadTest();
+		test.setup();
+		PerformanceProfiler.report(null);
+		System.out.println("Starting profiling");
+		PerformanceProfiler.setActive(true);
+		test.testTiff();
+		PerformanceProfiler.report(new File("/tmp/a1"), 3);
 	}
 }
